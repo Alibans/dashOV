@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Выработка внедрения</title>
+<style>
+  :root {
+    --bg: #f4f6fa; --card: #ffffff; --text: #17202e; --text2: #66738a; --border: #e1e6ef;
+    --red: #e5484d; --red-bg: #fdecec; --yellow: #d98a00; --yellow-bg: #fff5de; --green: #1f9d63; --green-bg: #e6f6ee;
+    --accent: #3b6fe0; --shadow: 0 1px 2px rgba(20,30,50,.06), 0 4px 14px rgba(20,30,50,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e131c; --card: #171e2b; --text: #eaf0fa; --text2: #8b98b1; --border: #26324a;
+      --red: #ff6369; --red-bg: #3a1a1e; --yellow: #f5b73a; --yellow-bg: #38290b; --green: #3dd68c; --green-bg: #11332a;
+      --accent: #6c97ff; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif; background: var(--bg); color: var(--text); padding: clamp(10px, 1.6vh, 22px) clamp(14px, 2vw, 40px) clamp(10px, 2vh, 30px); line-height: 1.3; }
+  .wrap { max-width: 2200px; margin: 0 auto; min-height: calc(100vh - 2 * clamp(10px, 1.8vh, 26px)); display: flex; flex-direction: column; }
+  body.tv { overflow: hidden; cursor: none; height: 100vh; } body.tv .wrap { height: 100%; min-height: 0; } body.tv .below { display: none; }
+
+  /* ---------- шапка ---------- */
+  .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: clamp(8px, 1.4vh, 18px); }
+  h1 { font-size: clamp(20px, 3.4vh, 34px); font-weight: 700; letter-spacing: -.01em; }
+  .sub { color: var(--text2); font-size: 14px; margin-top: 4px; }
+  .months { display: flex; gap: 6px; flex-wrap: wrap; }
+  .month-btn { border: 1px solid var(--border); background: var(--card); color: var(--text2); padding: 7px 13px; border-radius: 999px; font-size: 13px; cursor: pointer; font: inherit; font-size: 13px; }
+  .month-btn:hover { color: var(--text); border-color: var(--accent); }
+  .month-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .month-btn.nodata { opacity: .4; }
+
+  /* ---------- итоговая полоса ---------- */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: clamp(8px, 1.4vh, 18px); }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: clamp(8px, 1.4vh, 16px) 18px; box-shadow: var(--shadow); }
+  .kpi .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text2); }
+  .kpi .val { font-size: clamp(26px, 5vh, 52px); font-weight: 700; margin-top: 2px; letter-spacing: -.02em; line-height: 1.1; }
+  .kpi .hint { font-size: 13px; color: var(--text2); margin-top: 2px; }
+  .c-red { color: var(--red); } .c-yellow { color: var(--yellow); } .c-green { color: var(--green); }
+
+  /* ---------- зоны ---------- */
+  .zones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 12px; flex: 1 1 0; min-height: 560px; grid-template-rows: minmax(0, 1fr); }
+  @media (max-width: 1000px) { .zones { grid-template-columns: 1fr; } .zone { min-height: 640px; } }
+  .zone { border-radius: 18px; border: 2px solid var(--zc); background: var(--card); box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  .zone.red { --zc: var(--red); --zbg: var(--red-bg); }
+  .zone.yellow { --zc: var(--yellow); --zbg: var(--yellow-bg); }
+  .zone.green { --zc: var(--green); --zbg: var(--green-bg); }
+  .zone-head { background: var(--zbg); padding: clamp(6px, 1.2vh, 16px) 20px; display: flex; align-items: center; gap: 16px; flex: none; }
+  .zone-count { font-size: clamp(36px, 7vh, 76px); font-weight: 800; line-height: 1; color: var(--zc); min-width: 1.1ch; }
+  .zone-title { font-size: clamp(16px, 2.6vh, 28px); font-weight: 700; color: var(--zc); }
+  .zone-rule { font-size: clamp(11px, 1.6vh, 16px); color: var(--text2); margin-top: 2px; }
+  /* высота зоны = 4 сотрудника; если больше — карточки сжимаются, чтобы всё влезло */
+  .zone-body { padding: 12px; display: grid; gap: 10px; flex: 1 1 0; min-height: 0; overflow: hidden; grid-template-rows: repeat(4, minmax(0, 1fr)); --h: 100px; }
+  .emp { text-align: left; width: 100%; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: center; border: 1px solid var(--border); background: var(--bg); border-radius: 12px; padding: 0 clamp(10px, calc(var(--h) * .14), 18px); cursor: pointer; color: inherit; font: inherit; transition: transform .1s, border-color .1s; }
+  .emp:hover { border-color: var(--zc); transform: translateY(-1px); }
+  .emp-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .emp-name { font-size: clamp(14px, min(calc(var(--h) * .25), 2.1vw), 34px); font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .emp-pct { font-size: clamp(16px, min(calc(var(--h) * .32), 2.6vw), 44px); font-weight: 800; color: var(--zc); white-space: nowrap; line-height: 1; }
+  .bar { position: relative; height: clamp(5px, calc(var(--h) * .1), 14px); border-radius: 6px; background: var(--border); margin: clamp(4px, calc(var(--h) * .08), 12px) 0 clamp(3px, calc(var(--h) * .06), 9px); overflow: visible; }
+  .bar .fill { height: 100%; border-radius: 6px; background: var(--zc); }
+  .bar .norm { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); opacity: .55; border-radius: 1px; }
+  .zone-body.dense .rest { display: none; } .zone-body.dense .emp-name { font-size: clamp(13px, calc(var(--h) * .2), 24px); }
+  .emp-meta { display: flex; justify-content: space-between; font-size: clamp(11px, calc(var(--h) * .15), 20px); color: var(--text2); gap: 8px; white-space: nowrap; overflow: hidden; }
+  .emp-meta b { color: var(--text); font-weight: 650; }
+  .zone-empty { color: var(--text2); font-size: clamp(14px, 2.2vh, 22px); text-align: center; padding: 3vh 0; grid-row: 1 / span 4; }
+  .legend { color: var(--text2); font-size: clamp(11px, 1.5vh, 14px); margin: 0 0 14px; }
+  .legend i { display: inline-block; width: 2px; height: 12px; background: var(--text); opacity: .55; vertical-align: -2px; margin: 0 4px 0 2px; }
+
+  /* ---------- таблица ---------- */
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+  .panel-head { padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-weight: 650; font-size: 16px; user-select: none; }
+  .panel-head .arrow { color: var(--text2); transition: transform .15s; }
+  .panel.closed .arrow { transform: rotate(-90deg); }
+  .panel.closed .panel-body { display: none; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--text2); padding: 10px 16px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--bg); white-space: nowrap; font-weight: 600; }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.dept td { background: var(--bg); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text2); font-weight: 650; padding: 8px 16px; }
+  tr.sum td { font-weight: 700; background: var(--bg); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .pill::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .pill.red { background: var(--red-bg); color: var(--red); } .pill.yellow { background: var(--yellow-bg); color: var(--yellow); } .pill.green { background: var(--green-bg); color: var(--green); }
+  .mini { width: 90px; height: 7px; border-radius: 4px; background: var(--border); display: inline-block; vertical-align: middle; margin-right: 8px; overflow: hidden; }
+  .mini > span { display: block; height: 100%; }
+  .norm-note { display: block; font-size: 11px; font-weight: 400; color: var(--text2); }
+  .expand { border: 1px solid var(--border); background: var(--card); color: var(--accent); border-radius: 6px; padding: 2px 9px; cursor: pointer; font: inherit; font-size: 13px; }
+  tr.detail { display: none; } tr.detail.show { display: table-row; }
+  tr.detail td { background: var(--bg); padding: 8px 16px 14px 48px; }
+  .detail table { font-size: 13px; } .detail th { background: transparent; border-top: none; padding: 6px 10px; } .detail td { padding: 6px 10px !important; border-bottom: 1px solid var(--border); background: transparent; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .badge.ok { background: var(--green-bg); color: var(--green); } .badge.other { background: var(--bg); color: var(--text2); border: 1px solid var(--border); }
+
+  /* ---------- модалка ---------- */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(8,12,20,.6); z-index: 50; align-items: center; justify-content: center; padding: 16px; }
+  .overlay.show { display: flex; }
+  .modal { background: var(--card); border-radius: 18px; padding: 24px; width: min(560px, 100%); max-height: 86vh; overflow: auto; position: relative; border: 1px solid var(--border); }
+  .modal h2 { font-size: 22px; margin-bottom: 4px; padding-right: 30px; }
+  .modal .close { position: absolute; top: 14px; right: 16px; background: none; border: none; font-size: 22px; color: var(--text2); cursor: pointer; }
+  .modal-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 16px 0 18px; }
+  .stat { background: var(--bg); border-radius: 12px; padding: 12px 14px; }
+  .stat .v { font-size: 26px; font-weight: 750; } .stat .l { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; }
+  .modal h3 { font-size: 14px; color: var(--text2); margin: 8px 0; text-transform: uppercase; letter-spacing: .05em; }
+
+  .stale { display: none; margin-top: 6px; padding: 5px 12px; border-radius: 8px; background: var(--yellow-bg); color: var(--yellow); font-size: clamp(12px, 1.8vh, 16px); font-weight: 600; width: fit-content; } .stale.show { display: block; }
+  .state { text-align: center; padding: 60px 20px; color: var(--text2); font-size: 16px; }
+  .state.err { color: var(--red); }
+  .foot { margin-top: 26px; font-size: 12px; color: var(--text2); display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  details.settings summary { cursor: pointer; }
+  details.settings form { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  details.settings input, details.settings button { padding: 5px 9px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>Выработка внедрения</h1>
+      <div class="sub" id="info">Загрузка…</div><div class="stale" id="stale"></div>
+    </div>
+    <div class="months" id="months"></div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="zones" id="zones">
+    <div class="state" style="grid-column: 1 / -1">Загрузка данных…</div>
+  </div>
+  <div class="legend below" id="legend"></div>
+
+  <div class="panel closed below" id="panel">
+    <div class="panel-head" id="panelHead"><span>Детализация по сотрудникам</span><span class="arrow">▼</span></div>
+    <div class="panel-body"><div class="table-wrap" id="table"></div></div>
+  </div>
+
+  <div class="foot below">
+    <span id="stamp"></span>
+    <details class="settings">
+      <summary>Настройки</summary>
+      <form id="bookForm"><input id="bookInput" placeholder="Ссылка на таблицу или её ID" size="44"><button type="submit">Сохранить</button></form>
+    </details>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+
+<script>
+/* ============ ИСТОЧНИК ДАННЫХ ============
+   Дашборд читает две вкладки главной таблицы: «Данные» (план/факт/оценки/предпродажа по месяцам)
+   и «Предпродажа» (детали). Таблица должна быть открыта «всем, у кого есть ссылка» (просмотр).
+   ID таблицы: впишите ниже, добавьте в адрес ?book=ID или введите в «Настройки» внизу страницы. */
+const BOOK_ID = '';
+const ALL_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const ACTIVE_STATUSES = ['Согласована', 'В работе'];
+// праздники и нерабочие дни (месяц-день); при переносах выходных поправьте список
+const HOLIDAYS = { '1-1':1,'1-2':1,'1-7':1,'3-8':1,'3-21':1,'3-22':1,'3-23':1,'5-1':1,'5-7':1,'5-9':1,'7-6':1,'8-30':1,'10-25':1,'12-16':1,'12-17':1 };
+const DEMO = /[?&]demo/.test(location.search);
+const DEMO_COUNTS = (location.search.match(/[?&]demo=([\d,]+)/) || [])[1];   // ?demo=5,2,2 — сколько людей в красной, жёлтой, зелёной (для проверки вёрстки)
+if (/[?&]tv/.test(location.search)) document.body.classList.add('tv');       // режим телевизора: без таблицы и курсора
+
+function bookId() {
+  const q = (location.search.match(/[?&]book=([\w-]+)/) || [])[1];
+  if (q) return q;
+  let s = ''; try { s = localStorage.getItem('book_id') || ''; } catch (e) {}
+  return BOOK_ID || s;
+}
+const extractId = v => (String(v).match(/\/d\/([\w-]+)/) || String(v).match(/^([\w-]{20,})$/) || [])[1] || '';
+
+/* ============ загрузка из Google Sheets (gviz, без ключей) ============ */
+const queue = [];
+function loadSheet(sheetName) {
+  if (window.FIXTURE) return Promise.resolve(window.FIXTURE[sheetName] || []);   // для автотестов
+  return new Promise((resolve, reject) => { queue.push({ sheetName, resolve, reject }); if (queue.length === 1) next(); });
+}
+function next() {
+  if (!queue.length) return;
+  const item = queue[0];
+  const timer = setTimeout(() => { queue.shift(); item.reject(new Error('Таймаут загрузки')); next(); }, 20000);
+  window.google = window.google || {}; google.visualization = google.visualization || {}; google.visualization.Query = google.visualization.Query || {};
+  google.visualization.Query.setResponse = resp => {
+    clearTimeout(timer);
+    const done = queue.shift();
+    if (resp.status !== 'ok') done.reject(new Error('Таблица недоступна: ' + ((resp.errors && resp.errors[0] && resp.errors[0].message) || resp.status)));
+    else {
+      done.resolve(resp.table.rows.map(r => resp.table.cols.map((_, i) => { const c = r.c && r.c[i]; return c && c.v !== undefined && c.v !== null ? c.v : ''; })));
+    }
+    next();
+  };
+  const s = document.createElement('script');
+  s.src = 'https://docs.google.com/spreadsheets/d/' + bookId() + '/gviz/tq?tqx=out:json&sheet=' + encodeURIComponent(item.sheetName);
+  s.onerror = () => { clearTimeout(timer); queue.shift(); item.reject(new Error('Не удалось загрузить таблицу — проверьте ссылку и доступ «по ссылке»')); next(); };
+  document.head.appendChild(s);
+}
+const toNum = v => { const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.')); return isNaN(n) ? 0 : n; };
+function toDate(v) {   // gviz отдаёт даты как "Date(2026,9,5)" (месяц с нуля)
+  const m = /^Date\((\d+),(\d+),(\d+)/.exec(String(v));
+  return m ? new Date(+m[1], +m[2], +m[3], 12) : null;
+}
+
+/* ============ разбор листов ============ */
+// «Данные»: Месяц | ФИО | План | Факт | Оценки | Предпродажа | № месяца | Данные по
+function parseData(rows) {
+  const byMonth = {}; let dataDate = null;
+  for (const r of rows) {
+    const month = String(r[0] || '').trim(), name = String(r[1] || '').trim();
+    if (!month || !name) continue;
+    (byMonth[month] = byMonth[month] || []).push({ name, plan: toNum(r[2]), fact: toNum(r[3]), oc: toNum(r[4]), ps: toNum(r[5]) });
+    const d = toDate(r[7]); if (d && (!dataDate || d > dataDate)) dataDate = d;
+  }
+  return { byMonth, dataDate };
+}
+// «Предпродажа»: Источник | Исполнитель | Клиент | Наряд | Дата | Часы | Статус | Месяц | Реализовано | Корр. | Осталось | Коммент. | С мес. | По мес.
+function parsePresale(rows) {
+  const out = [];
+  for (const r of rows) {
+    const name = String(r[1] || '').trim(), status = String(r[6] || '').trim();
+    if (!name || !ACTIVE_STATUSES.includes(status)) continue;
+    const left = toNum(r[10]); if (left <= 0) continue;
+    out.push({ name, client: String(r[2] || ''), hours: toNum(r[5]), left, done: toNum(r[8]), status, from: toNum(r[12]) || 1, to: toNum(r[13]) || 12, src: String(r[0] || '') });
+  }
+  return out;
+}
+
+/* ============ рабочие дни и норма ============ */
+const isWork = d => d.getDay() !== 0 && d.getDay() !== 6 && !HOLIDAYS[(d.getMonth() + 1) + '-' + d.getDate()];
+function prevWorkDay() { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - 1); while (!isWork(d)) d.setDate(d.getDate() - 1); return d; }
+function workInfo(monthIdx) {   // норма на сегодня = доля прошедших рабочих дней месяца
+  const ref = prevWorkDay(), year = ref.getFullYear();
+  const dim = new Date(year, monthIdx + 1, 0).getDate();
+  const rel = monthIdx - ref.getMonth();   // <0 прошлый месяц, 0 текущий, >0 будущий
+  let total = 0, passed = 0;
+  for (let d = 1; d <= dim; d++) {
+    const dt = new Date(year, monthIdx, d, 12);
+    if (!isWork(dt)) continue;
+    total++;
+    if (rel < 0 || (rel === 0 && dt <= ref)) passed++;
+  }
+  return { total, passed, left: total - passed, norm: total ? Math.min(passed / total * 100, 100) : 0, ref };
+}
+
+/* ============ вычисление строк ============ */
+function build(people, presale, wi, monthIdx) {
+  const mi = monthIdx + 1;
+  return people.filter(p => p.plan > 0).sort((a, b) => a.name.localeCompare(b.name, 'ru')).map(p => {
+    const pct = p.fact / p.plan * 100;
+    const zone = pct >= wi.norm ? 'green' : pct >= wi.norm * 0.8 ? 'yellow' : 'red';
+    const items = presale.filter(i => i.name === p.name && i.from <= mi && mi <= i.to);
+    const ps = p.ps || items.reduce((s, i) => s + i.left, 0);
+    const forecast = (p.fact + ps) / p.plan * 100;
+    const left = Math.max(p.plan - p.fact, 0);
+    return { name: p.name, plan: p.plan, fact: p.fact, oc: p.oc, pct, zone, ps, items, forecast, left, perDay: wi.left > 0 ? left / wi.left : 0 };
+  });
+}
+const fz = f => f >= 90 ? ['green', 'Выполним'] : f >= 70 ? ['yellow', 'Риск'] : ['red', 'Провал'];
+const num = (v, d = 1) => Number(v).toLocaleString('ru-RU', { maximumFractionDigits: d, minimumFractionDigits: 0 });
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ddmm = d => String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0');
+
+/* ============ отрисовка ============ */
+let state = { rows: [], wi: null, month: '', presaleCount: 0, dataDate: null, enabled: {} };
+
+function render() {
+  const { rows, wi, month } = state;
+  const sumPlan = rows.reduce((s, r) => s + r.plan, 0), sumFact = rows.reduce((s, r) => s + r.fact, 0), sumPs = rows.reduce((s, r) => s + r.ps, 0);
+  const pct = sumPlan ? sumFact / sumPlan * 100 : 0, fc = sumPlan ? (sumFact + sumPs) / sumPlan * 100 : 0;
+  const pctZone = pct >= wi.norm ? 'green' : pct >= wi.norm * 0.8 ? 'yellow' : 'red';
+  const [fcz, fcl] = fz(fc);
+
+  document.getElementById('info').textContent =
+    `${month} · ${rows.length} сотрудников · ${state.presaleCount} позиций предпродажи · прошло ${wi.passed} из ${wi.total} рабочих дней` +
+    (state.dataDate ? ` · данные по ${ddmm(state.dataDate)}` : '');
+  const stale = document.getElementById('stale');
+  const isCurrent = ALL_MONTHS.indexOf(month) === wi.ref.getMonth();
+  if (isCurrent && state.dataDate && state.dataDate < wi.ref) {
+    stale.textContent = `⚠ В таблице данные только по ${ddmm(state.dataDate)}, а должны быть по ${ddmm(wi.ref)} — загрузите свежую выгрузку`; stale.classList.add('show');
+  } else stale.classList.remove('show');
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div class="lbl">План отдела</div><div class="val">${num(sumPlan, 0)} <small style="font-size:.45em;color:var(--text2)">ч</small></div><div class="hint">осталось ${wi.left} раб. дн.</div></div>
+    <div class="kpi"><div class="lbl">Факт</div><div class="val">${num(sumFact, 1)} <small style="font-size:.45em;color:var(--text2)">ч</small></div><div class="hint">осталось ${num(Math.max(sumPlan - sumFact, 0), 0)} ч до плана</div></div>
+    <div class="kpi"><div class="lbl">Выполнение</div><div class="val c-${pctZone}">${num(pct, 1)}%</div><div class="hint">норма на сегодня ${num(wi.norm, 0)}%</div></div>
+    <div class="kpi"><div class="lbl">Прогноз с предпродажей</div><div class="val c-${fcz}">${num(fc, 1)}%</div><div class="hint">${fcl}${sumPs ? ' · предпродажа ' + num(sumPs, 1) + ' ч' : ''}</div></div>`;
+
+  const zones = { red: [], yellow: [], green: [] };
+  rows.forEach(r => zones[r.zone].push(r));
+  zones.red.sort((a, b) => a.pct - b.pct); zones.yellow.sort((a, b) => a.pct - b.pct); zones.green.sort((a, b) => b.pct - a.pct);
+  const meta = {
+    red: ['Красная зона', `ниже ${num(wi.norm * 0.8, 0)}% (отстают от нормы)`],
+    yellow: ['Жёлтая зона', `${num(wi.norm * 0.8, 0)}–${num(wi.norm, 0)}% (чуть отстают)`],
+    green: ['Зелёная зона', `от ${num(wi.norm, 0)}% (идут по плану)`]
+  };
+  document.getElementById('zones').innerHTML = ['red', 'yellow', 'green'].map(z => `
+    <section class="zone ${z}">
+      <div class="zone-head"><div class="zone-count">${zones[z].length}</div><div><div class="zone-title">${meta[z][0]}</div><div class="zone-rule">${meta[z][1]}</div></div></div>
+      <div class="zone-body">${zones[z].length ? zones[z].map(r => card(r, wi)).join('') : '<div class="zone-empty">Никого</div>'}</div>
+    </section>`).join('');
+  document.getElementById('legend').innerHTML = `<i></i>— норма на сегодня (${num(wi.norm, 0)}% плана к этому дню). Зона считается по темпу выполнения; статус «Выполним / Риск / Провал» в таблице — по прогнозу с предпродажей (≥90% / 70–89% / &lt;70%).`;
+  buildNav();
+  fitZones();
+  renderTable(rows, wi);
+  document.getElementById('stamp').textContent = 'Обновлено ' + new Date().toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + (DEMO ? ' · ДЕМО-ДАННЫЕ' : '');
+}
+
+/* Высота зоны рассчитана на 4 сотрудников. Если их больше — карточки сжимаются так, чтобы всё влезло; больше 8 — две колонки. */
+function fitZones() {
+  document.querySelectorAll('.zone-body').forEach(body => {
+    const n = body.querySelectorAll('.emp').length;
+    const cols = n > 8 ? 2 : 1, rows = Math.max(4, Math.ceil(n / cols));
+    body.classList.toggle('dense', cols === 2);
+    body.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+    body.style.gridTemplateRows = 'repeat(' + rows + ', minmax(0, 1fr))';
+    const cs = getComputedStyle(body), gap = parseFloat(cs.rowGap) || 10;
+    const inner = body.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    body.style.setProperty('--h', Math.max((inner - gap * (rows - 1)) / rows, 30) + 'px');
+  });
+}
+window.addEventListener('resize', fitZones);
+
+function card(r, wi) {
+  const w = Math.min(r.pct, 100), n = Math.min(wi.norm, 100);
+  return `<button class="emp" data-name="${esc(r.name)}">
+    <div class="emp-row"><span class="emp-name">${esc(r.name)}</span><span class="emp-pct">${num(r.pct, 0)}%</span></div>
+    <div class="bar"><div class="fill" style="width:${w}%"></div><div class="norm" style="left:${n}%"></div></div>
+    <div class="emp-meta"><span><b>${num(r.fact, 1)}</b> из ${num(r.plan, 0)} ч</span>${r.left > 0 && wi.left > 0 ? `<span class="rest">осталось <b>${num(r.left, 0)}</b> ч · ${num(r.perDay, 1)} ч/день</span>` : '<span>план выполнен</span>'}</div>
+  </button>`;
+}
+
+function renderTable(rows, wi) {
+  if (!rows.length) { document.getElementById('table').innerHTML = '<div class="state err">Нет сотрудников с планом на этот месяц</div>'; return; }
+  let html = `<table><thead><tr><th>№</th><th>ФИО</th><th class="num">План, ч</th><th class="num">Факт, ч</th>
+    <th class="num">% выполнения<span class="norm-note">норма ${num(wi.norm, 0)}%</span></th><th class="num">Оценки, ч</th><th class="num">Предпродажа, ч</th><th>Прогноз</th><th>Статус</th><th></th></tr></thead><tbody>`;
+  let tp = 0, tf = 0, tps = 0, toc = 0;
+  rows.forEach((r, i) => {
+    const idx = i + 1; tp += r.plan; tf += r.fact; tps += r.ps; toc += r.oc;
+    const [fzone, flabel] = fz(r.forecast);
+    html += `<tr><td>${idx}</td><td><b>${esc(r.name)}</b></td><td class="num">${num(r.plan, 1)}</td><td class="num">${num(r.fact, 1)}</td>
+      <td class="num c-${r.zone}"><b>${num(r.pct, 1)}%</b></td><td class="num">${r.oc > 0 ? num(r.oc, 1) : '—'}</td><td class="num">${r.ps > 0 ? num(r.ps, 1) : '—'}</td>
+      <td><span class="mini"><span style="width:${Math.min(r.forecast, 100)}%;background:var(--${fzone})"></span></span>${num(r.forecast, 1)}%</td>
+      <td><span class="pill ${fzone}">${flabel}</span></td><td>${r.items.length ? `<button class="expand" data-d="d${idx}">${r.items.length}</button>` : ''}</td></tr>`;
+    if (r.items.length) {
+      html += `<tr class="detail" id="d${idx}"><td colspan="10"><table><tr><th>Клиент</th><th class="num">Ожид., ч</th><th class="num">Сделано, ч</th><th class="num">Осталось, ч</th><th>Статус</th><th>Источник</th></tr>` +
+        r.items.map(it => `<tr><td>${esc(it.client)}</td><td class="num">${num(it.hours, 1)}</td><td class="num">${num(it.done, 1)}</td><td class="num"><b>${num(it.left, 1)}</b></td><td><span class="badge ${it.status === 'Согласована' ? 'ok' : 'other'}">${esc(it.status)}</span></td><td>${esc(it.src)}</td></tr>`).join('') + '</table></td></tr>';
+    }
+  });
+  const p = tp ? tf / tp * 100 : 0, f = tp ? (tf + tps) / tp * 100 : 0, [fzone, fl] = fz(f);
+  const pz = p >= wi.norm ? 'green' : p >= wi.norm * 0.8 ? 'yellow' : 'red';
+  html += `<tr class="sum"><td></td><td>ИТОГО</td><td class="num">${num(tp, 1)}</td><td class="num">${num(tf, 1)}</td><td class="num c-${pz}">${num(p, 1)}%</td><td class="num">${toc ? num(toc, 1) : '—'}</td><td class="num">${tps ? num(tps, 1) : '—'}</td><td>${num(f, 1)}%</td><td><span class="pill ${fzone}">${fl}</span></td><td></td></tr></tbody></table>`;
+  document.getElementById('table').innerHTML = html;
+}
+
+function openEmp(name) {
+  const r = state.rows.find(x => x.name === name); if (!r) return;
+  const [fzone, fl] = fz(r.forecast);
+  document.getElementById('modal').innerHTML = `
+    <button class="close" id="mclose">✕</button>
+    <h2>${esc(r.name)}</h2><span class="pill ${r.zone}">${{ red: 'Красная зона', yellow: 'Жёлтая зона', green: 'Зелёная зона' }[r.zone]}</span>
+    <div class="modal-stats">
+      <div class="stat"><div class="v">${num(r.plan, 1)}</div><div class="l">План, ч</div></div>
+      <div class="stat"><div class="v">${num(r.fact, 1)}</div><div class="l">Факт, ч</div></div>
+      <div class="stat"><div class="v c-${r.zone}">${num(r.pct, 1)}%</div><div class="l">Выполнение (норма ${num(state.wi.norm, 0)}%)</div></div>
+      <div class="stat"><div class="v c-${fzone}">${num(r.forecast, 1)}%</div><div class="l">Прогноз · ${fl}</div></div>
+    </div>
+    ${r.left > 0 && state.wi.left > 0 ? `<p style="margin-bottom:14px">До плана осталось <b>${num(r.left, 1)} ч</b> — это <b>${num(r.perDay, 1)} ч в день</b> на ${state.wi.left} раб. дн.</p>` : ''}
+    <p style="margin-bottom:14px;color:var(--text2)">Оценки за месяц: ${num(r.oc, 1)} ч (в факт не входят)</p>
+    <h3>Предпродажа</h3>
+    ${r.items.length ? `<table><tr><th>Клиент</th><th class="num">Осталось, ч</th><th>Статус</th></tr>${r.items.map(it => `<tr><td>${esc(it.client)}</td><td class="num">${num(it.left, 1)}</td><td><span class="badge ${it.status === 'Согласована' ? 'ok' : 'other'}">${esc(it.status)}</span></td></tr>`).join('')}</table>` : '<span style="color:var(--text2)">Нет активной предпродажи</span>'}`;
+  document.getElementById('overlay').classList.add('show');
+}
+
+/* ============ демо-данные (открыть страницу с ?demo) ============ */
+function demoData(norm, counts) {
+  const names = ['Адиходжаев Амирбек', 'Ахмедов Фахриёр', 'Иогансен Александр', 'Молчанов Андрей', 'Омар Нариман', 'Павлова Диана', 'Самаров Вячеслав', 'Смунёв Артур', 'Филонцева Дарья'];
+  let people = [];
+  if (counts) {
+    const k = { red: [0.3, 0.7], yellow: [0.82, 0.98], green: [1.05, 1.4] }, zs = ['red', 'yellow', 'green']; let i = 0;
+    counts.split(',').forEach((c, zi) => { for (let j = 0; j < Number(c); j++) { i++; const [a, b] = k[zs[zi]]; const plan = 60 + (i * 17) % 120;
+      people.push({ name: 'Сотрудник ' + (i < 10 ? '0' + i : i) + ' Фамилия', plan, fact: Math.round(plan * norm / 100 * (a + (b - a) * ((j % 4) / 3)) * 10) / 10, oc: 5, ps: 0 }); } });
+  } else {
+    const plan = [30, 60, 80, 100, 180, 60, 150, 120, 90], k = [0.3, 0.9, 0.55, 1.25, 0.7, 1.1, 0.85, 1.0, 0.45];
+    people = names.map((n, i) => ({ name: n, plan: plan[i], fact: Math.round(plan[i] * norm / 100 * k[i] * 10) / 10, oc: 12, ps: i === 3 ? 32 : i === 5 ? 8 : 0 }));
+  }
+  const presale = [{ name: 'Молчанов Андрей', client: 'ТОО Альфа', hours: 20, left: 20, done: 0, status: 'Согласована', from: 1, to: 12, src: 'авто' },
+    { name: 'Молчанов Андрей', client: 'ТОО Бета', hours: 12, left: 12, done: 0, status: 'В работе', from: 1, to: 12, src: 'вручную' },
+    { name: 'Павлова Диана', client: 'ИП Гамма', hours: 10, left: 8, done: 2, status: 'Согласована', from: 1, to: 12, src: 'авто' }];
+  return { people, presale };
+}
+
+/* ============ загрузка и управление ============ */
+async function load(month) {
+  state.month = month;
+  const mi = ALL_MONTHS.indexOf(month), wi = workInfo(mi); state.wi = wi;
+  document.getElementById('info').textContent = 'Загрузка ' + month + '…';
+  try {
+    let people, presale;
+    if (DEMO) { const d = demoData(wi.norm || 40, DEMO_COUNTS); people = d.people; presale = d.presale; state.enabled = {}; ALL_MONTHS.forEach(m => state.enabled[m] = true); state.dataDate = null; }
+    else {
+      if (!bookId() && !window.FIXTURE) { showSetup(); return; }
+      const [dRows, pRows] = await Promise.all([loadSheet('Данные'), loadSheet('Предпродажа')]);
+      const d = parseData(dRows); presale = parsePresale(pRows);
+      state.enabled = {}; Object.keys(d.byMonth).forEach(m => { if (d.byMonth[m].some(p => p.plan > 0)) state.enabled[m] = true; });
+      state.dataDate = d.dataDate;
+      people = d.byMonth[month] || [];
+    }
+    state.rows = build(people, presale, wi, mi);
+    state.presaleCount = new Set(state.rows.flatMap(r => r.items)).size;
+    render();
+  } catch (e) {
+    document.getElementById('zones').innerHTML = `<div class="state err" style="grid-column:1/-1">Ошибка: ${esc(e.message)}</div>`;
+    document.getElementById('info').textContent = 'Ошибка загрузки';
+  }
+}
+function showSetup() {
+  document.getElementById('info').textContent = 'Не указана таблица';
+  document.getElementById('zones').innerHTML = '<div class="state" style="grid-column:1/-1">Вставьте ссылку на главную таблицу в «Настройки» внизу страницы<br>(таблица должна быть открыта «всем, у кого есть ссылка»).</div>';
+  document.getElementById('kpis').innerHTML = '';
+  document.querySelector('details.settings').open = true;
+}
+function buildNav() {
+  const box = document.getElementById('months'); box.innerHTML = '';
+  ALL_MONTHS.forEach(m => {
+    const has = !!state.enabled[m], b = document.createElement('button');
+    b.className = 'month-btn' + (m === state.month ? ' active' : '') + (has ? '' : ' nodata'); b.textContent = m;
+    b.onclick = () => { if (!has) return; load(m); };
+    box.appendChild(b);
+  });
+}
+document.getElementById('zones').onclick = e => { const b = e.target.closest('.emp'); if (b) openEmp(b.dataset.name); };
+document.getElementById('table').onclick = e => { const b = e.target.closest('.expand'); if (b) document.getElementById(b.dataset.d).classList.toggle('show'); };
+document.getElementById('overlay').onclick = e => { if (e.target.id === 'overlay' || e.target.id === 'mclose') e.currentTarget.classList.remove('show'); };
+document.getElementById('panelHead').onclick = () => document.getElementById('panel').classList.toggle('closed');
+document.getElementById('bookForm').onsubmit = e => {
+  e.preventDefault();
+  const id = extractId(document.getElementById('bookInput').value);
+  if (!id) { alert('Не нашёл ID таблицы в этой ссылке'); return; }
+  try { localStorage.setItem('book_id', id); } catch (x) {}
+  load(state.month || ALL_MONTHS[prevWorkDay().getMonth()]);
+};
+const startMonth = ALL_MONTHS[prevWorkDay().getMonth()]; state.month = startMonth; state.enabled = {};
+load(startMonth);
+setInterval(() => load(state.month), 15 * 60 * 1000);   // автообновление каждые 15 минут
+</script>
+</body>
+</html>
