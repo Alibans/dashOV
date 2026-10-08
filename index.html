@@ -122,6 +122,45 @@
   details.settings summary { cursor: pointer; }
   details.settings form { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
   details.settings input, details.settings button { padding: 5px 9px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; font-size: 12px; }
+
+  /* ---------- телефон ---------- */
+  @media (max-width: 700px) {
+    html, body { overflow-x: hidden; }
+    body { padding: 12px 12px 28px; }
+    .wrap { min-height: 0; min-width: 0; display: block; }
+    .top > * { min-width: 0; max-width: 100%; }
+    .zones { flex: none; }
+    .zone { flex: none; }
+    .zone-body { flex: none; }
+    h1 { font-size: 24px; }
+    .sub { font-size: 13px; }
+    .months { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; width: 100%; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .months::-webkit-scrollbar { display: none; }
+    .month-btn { flex: none; padding: 8px 14px; }
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .kpi { padding: 10px 12px; }
+    .kpi .lbl { font-size: 10px; }
+    .kpi .val { font-size: 28px; }
+    .kpi .hint { font-size: 12px; }
+    .zones { grid-template-columns: minmax(0, 1fr); min-height: 0; gap: 12px; }
+    .zone { min-height: 0; }
+    .zone-head { padding: 10px 14px; gap: 12px; }
+    .zone-count { font-size: 42px; }
+    .zone-title { font-size: 18px; }
+    .zone-rule { font-size: 12px; }
+    .zone-body { grid-template-rows: none !important; grid-template-columns: minmax(0, 1fr) !important; overflow: visible; padding: 10px; gap: 8px; }
+    .zone-empty { grid-row: auto; padding: 8px 0; font-size: 15px; }
+    .emp { padding: 10px 12px; min-width: 0; }
+    .emp-name { font-size: 17px !important; }
+    .emp-pct { font-size: 24px !important; }
+    .bar { height: 8px !important; margin: 8px 0 6px !important; }
+    .emp-meta { font-size: 13px !important; flex-wrap: wrap; white-space: normal; gap: 2px 10px; }
+    .zone-body.dense .rest { display: inline; }
+    .legend { font-size: 12px; }
+    .panel-head { padding: 12px 14px; }
+    th, td { padding: 9px 10px; font-size: 13px; }
+    .modal { padding: 18px; }
+  }
 </style>
 </head>
 <body>
@@ -322,6 +361,10 @@ function render() {
 /* Высота зоны рассчитана на 4 сотрудников. Если их больше — карточки сжимаются так, чтобы всё влезло; больше 8 — две колонки. */
 function fitZones() {
   document.querySelectorAll('.zone-body').forEach(body => {
+    if (window.innerWidth <= 700) {   // телефон: высота по содержимому, без раскладки на 4 строки
+      body.style.gridTemplateRows = ''; body.style.gridTemplateColumns = ''; body.classList.remove('dense'); body.style.setProperty('--h', '84px');
+      return;
+    }
     const n = body.querySelectorAll('.emp').length;
     const cols = n > 8 ? 2 : 1, rows = Math.max(4, Math.ceil(n / cols));
     body.classList.toggle('dense', cols === 2);
@@ -441,6 +484,8 @@ function buildNav() {
     b.onclick = () => { if (!has) return; load(m); };
     box.appendChild(b);
   });
+  const act = box.querySelector('.active');   // на телефоне ряд месяцев прокручивается — показываем текущий месяц
+  if (act) box.scrollLeft = act.offsetLeft - box.clientWidth / 2 + act.offsetWidth / 2;
 }
 document.getElementById('zones').onclick = e => { const b = e.target.closest('.emp'); if (b) openEmp(b.dataset.name); };
 document.getElementById('table').onclick = e => { const b = e.target.closest('.expand'); if (b) document.getElementById(b.dataset.d).classList.toggle('show'); };
