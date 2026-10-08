@@ -17,7 +17,17 @@
       --accent: #6c97ff; --shadow: none;
     }
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  /* тема можно задать вручную: ?theme=dark или ?theme=light; в режиме ?tv по умолчанию тёмная */
+  :root[data-theme="dark"] {
+    --bg: #0e131c; --card: #171e2b; --text: #eaf0fa; --text2: #8b98b1; --border: #26324a;
+    --red: #ff6369; --red-bg: #3a1a1e; --yellow: #f5b73a; --yellow-bg: #38290b; --green: #3dd68c; --green-bg: #11332a;
+    --accent: #6c97ff; --shadow: none;
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f6fa; --card: #ffffff; --text: #17202e; --text2: #66738a; --border: #e1e6ef;
+    --red: #e5484d; --red-bg: #fdecec; --yellow: #d98a00; --yellow-bg: #fff5de; --green: #1f9d63; --green-bg: #e6f6ee;
+    --accent: #3b6fe0; --shadow: 0 1px 2px rgba(20,30,50,.06), 0 4px 14px rgba(20,30,50,.05);
+  }  * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif; background: var(--bg); color: var(--text); padding: clamp(10px, 1.6vh, 22px) clamp(14px, 2vw, 40px) clamp(10px, 2vh, 30px); line-height: 1.3; }
   .wrap { max-width: 2200px; margin: 0 auto; min-height: calc(100vh - 2 * clamp(10px, 1.8vh, 26px)); display: flex; flex-direction: column; }
   body.tv { overflow: hidden; cursor: none; height: 100vh; } body.tv .wrap { height: 100%; min-height: 0; } body.tv .below { display: none; }
@@ -152,14 +162,19 @@
    Дашборд читает две вкладки главной таблицы: «Данные» (план/факт/оценки/предпродажа по месяцам)
    и «Предпродажа» (детали). Таблица должна быть открыта «всем, у кого есть ссылка» (просмотр).
    ID таблицы: впишите ниже, добавьте в адрес ?book=ID или введите в «Настройки» внизу страницы. */
-const BOOK_ID = '';
+const BOOK_ID = '1_9wiPEgcmuWH88jcTFMZoV4YM4Eyrs1UbvVdKO_wRfE';
 const ALL_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const ACTIVE_STATUSES = ['Согласована', 'В работе'];
 // праздники и нерабочие дни (месяц-день); при переносах выходных поправьте список
 const HOLIDAYS = { '1-1':1,'1-2':1,'1-7':1,'3-8':1,'3-21':1,'3-22':1,'3-23':1,'5-1':1,'5-7':1,'5-9':1,'7-6':1,'8-30':1,'10-25':1,'12-16':1,'12-17':1 };
 const DEMO = /[?&]demo/.test(location.search);
 const DEMO_COUNTS = (location.search.match(/[?&]demo=([\d,]+)/) || [])[1];   // ?demo=5,2,2 — сколько людей в красной, жёлтой, зелёной (для проверки вёрстки)
-if (/[?&]tv/.test(location.search)) document.body.classList.add('tv');       // режим телевизора: без таблицы и курсора
+if (/[?&]tv/.test(location.search)) document.body.classList.add('tv');
+(function () {   // тема: ?theme=dark|light, в режиме ?tv по умолчанию тёмная, иначе как в системе
+  const m = /[?&]theme=(dark|light)/.exec(location.search);
+  const th = m ? m[1] : (/[?&]tv/.test(location.search) ? 'dark' : '');
+  if (th) document.documentElement.setAttribute('data-theme', th);
+})();       // режим телевизора: без таблицы и курсора
 
 function bookId() {
   const q = (location.search.match(/[?&]book=([\w-]+)/) || [])[1];
