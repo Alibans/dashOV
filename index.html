@@ -200,8 +200,12 @@
 /* ============ ИСТОЧНИК ДАННЫХ ============
    Дашборд читает две вкладки главной таблицы: «Данные» (план/факт/оценки/предпродажа по месяцам)
    и «Предпродажа» (детали). Таблица должна быть открыта «всем, у кого есть ссылка» (просмотр).
-   ID таблицы: впишите ниже, добавьте в адрес ?book=ID или введите в «Настройки» внизу страницы. */
+   ID таблицы: впишите ниже, добавьте в адрес ?book=ID или введите в «Настройки» внизу страницы.
+   Как читаем: сначала выгрузка CSV по gid листа (отдаёт ВСЕ строки, даже если на листе включён фильтр),
+   если не вышло (другая таблица, страница открыта как файл file://) — gviz, который возвращает только
+   видимые строки: фильтр на листе «Предпродажа» тогда прячет детали от дашборда. */
 const BOOK_ID = '1_9wiPEgcmuWH88jcTFMZoV4YM4Eyrs1UbvVdKO_wRfE';
+const SHEET_GIDS = { 'Данные': '915506806', 'Предпродажа': '1781381540' };   // gid из адреса листа (…#gid=…), только для BOOK_ID
 const ALL_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const ACTIVE_STATUSES = ['Согласована', 'В работе'];
 // праздники и нерабочие дни (месяц-день); при переносах выходных поправьте список
@@ -223,10 +227,47 @@ function bookId() {
 }
 const extractId = v => (String(v).match(/\/d\/([\w-]+)/) || String(v).match(/^([\w-]{20,})$/) || [])[1] || '';
 
-/* ============ загрузка из Google Sheets (gviz, без ключей) ============ */
-const queue = [];
+/* ============ загрузка из Google Sheets (без ключей) ============ */
+let csvFailed = {};   // лист → причина, если CSV не загрузился и сработал запасной gviz (для подсказки в карточке)
 function loadSheet(sheetName) {
   if (window.FIXTURE) return Promise.resolve(window.FIXTURE[sheetName] || []);   // для автотестов
+  const gid = bookId() === BOOK_ID ? SHEET_GIDS[sheetName] : '';
+  delete csvFailed[sheetName];
+  if (!gid) return loadGviz(sheetName);
+  return loadCsv(gid).catch(e => { csvFailed[sheetName] = e.message; console.warn('CSV «' + sheetName + '»: ' + e.message + ' — читаю через gviz'); return loadGviz(sheetName); });
+}
+// Выгрузка CSV по gid: все строки листа независимо от фильтра. Первая строка — заголовок, её отбрасываем (gviz заголовок в строки не включает).
+async function loadCsv(gid) {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const resp = await fetch('https://docs.google.com/spreadsheets/d/' + bookId() + '/export?format=csv&gid=' + gid, { signal: ctl.signal, cache: 'no-store' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const rows = parseCsv(await resp.text());
+    if (!rows.length) throw new Error('пустой ответ');
+    return rows.slice(1);
+  } catch (e) { throw new Error(e.name === 'AbortError' ? 'таймаут' : e.message); }
+  finally { clearTimeout(timer); }
+}
+function parseCsv(text) {   // RFC 4180: поля в кавычках могут содержать запятые, кавычки ("") и переводы строк
+  const rows = []; let row = [], field = '', q = false;
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); rows.push(row); row = []; field = '';
+    } else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(v => v !== ''));
+}
+const queue = [];
+function loadGviz(sheetName) {
   return new Promise((resolve, reject) => { queue.push({ sheetName, resolve, reject }); if (queue.length === 1) next(); });
 }
 function next() {
@@ -248,10 +289,12 @@ function next() {
   s.onerror = () => { clearTimeout(timer); queue.shift(); item.reject(new Error('Не удалось загрузить таблицу — проверьте ссылку и доступ «по ссылке»')); next(); };
   document.head.appendChild(s);
 }
-const toNum = v => { const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.')); return isNaN(n) ? 0 : n; };
-function toDate(v) {   // gviz отдаёт даты как "Date(2026,9,5)" (месяц с нуля)
+const toNum = v => { const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[\s ]/g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };   // CSV: "1 063,5"
+function toDate(v) {   // gviz отдаёт даты как "Date(2026,9,5)" (месяц с нуля), CSV — как "05.10.2026"
   const m = /^Date\((\d+),(\d+),(\d+)/.exec(String(v));
-  return m ? new Date(+m[1], +m[2], +m[3], 12) : null;
+  if (m) return new Date(+m[1], +m[2], +m[3], 12);
+  const d = /^(\d{1,2})\.(\d{1,2})\.(\d{4})/.exec(String(v).trim());
+  return d ? new Date(+d[3], +d[2] - 1, +d[1], 12) : null;
 }
 
 /* ============ разбор листов ============ */
@@ -424,8 +467,15 @@ function openEmp(name) {
     ${r.left > 0 && state.wi.left > 0 ? `<p style="margin-bottom:14px">До плана осталось <b>${num(r.left, 1)} ч</b> — это <b>${num(r.perDay, 1)} ч в день</b> на ${state.wi.left} раб. дн.</p>` : ''}
     <p style="margin-bottom:14px;color:var(--text2)">Оценки за месяц: ${num(r.oc, 1)} ч (в факт не входят)</p>
     <h3>Предпродажа</h3>
-    ${r.items.length ? `<table><tr><th>Клиент</th><th class="num">Осталось, ч</th><th>Статус</th></tr>${r.items.map(it => `<tr><td>${esc(it.client)}</td><td class="num">${num(it.left, 1)}</td><td><span class="badge ${it.status === 'Согласована' ? 'ok' : 'other'}">${esc(it.status)}</span></td></tr>`).join('')}</table>` : '<span style="color:var(--text2)">Нет активной предпродажи</span>'}`;
+    ${r.items.length ? `<table><tr><th>Клиент</th><th class="num">Осталось, ч</th><th>Статус</th></tr>${r.items.map(it => `<tr><td>${esc(it.client)}</td><td class="num">${num(it.left, 1)}</td><td><span class="badge ${it.status === 'Согласована' ? 'ok' : 'other'}">${esc(it.status)}</span></td></tr>`).join('')}</table>` : `<span style="color:var(--text2)">${noPresaleText(r)}</span>`}`;
   document.getElementById('overlay').classList.add('show');
+}
+// Деталей нет, а в сводке («Данные») предпродажа есть — значит, детали до дашборда не дошли: обычно на листе «Предпродажа» включён фильтр.
+function noPresaleText(r) {
+  if (!(r.ps > 0)) return 'Нет активной предпродажи';
+  return `В сводке предпродажа ${num(r.ps, 1)} ч, но детали не загрузились` +
+    (csvFailed['Предпродажа'] ? ' (лист прочитан запасным способом, он отдаёт только видимые строки). ' : '. ') +
+    'Снимите фильтр на листе «Предпродажа» (Данные → Удалить фильтр) и обновите страницу.';
 }
 
 /* ============ демо-данные (открыть страницу с ?demo) ============ */
